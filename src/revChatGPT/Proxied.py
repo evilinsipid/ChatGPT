@@ -2,15 +2,18 @@ import json
 import logging
 import uuid
 from os import environ
-
-from OpenAIAuth.OpenAIAuth import OpenAIAuth
+from random import choice
 
 import tls_client
+from OpenAIAuth.OpenAIAuth import OpenAIAuth
 
 # Disable all logging
 logging.basicConfig(level=logging.ERROR)
 
-BASE_URL = environ.get("CHATGPT_BASE_URL") or "http://127.0.0.1:5000/"
+BASE_URL = environ.get("CHATGPT_BASE_URL") or choice(
+    ["https://chatgpt.duti.tech/", "https://sathoro.duti.tech/"]
+)
+
 
 class Chatbot:
     def __init__(
@@ -47,7 +50,7 @@ class Chatbot:
         if "password" not in config:
             raise Exception("Password not found in config!")
         self.__login()
-        
+
     def __refresh_headers(self, access_token):
         self.session.headers.clear()
         self.session.headers.update(
@@ -61,9 +64,13 @@ class Chatbot:
                 "Referer": "https://chat.openai.com/chat",
             },
         )
-    
+
     def __login(self):
-        auth = OpenAIAuth(email_address=self.config.get("email"), password=self.config.get("password"), proxy=self.config.get("proxy"))
+        auth = OpenAIAuth(
+            email_address=self.config.get("email"),
+            password=self.config.get("password"),
+            proxy=self.config.get("proxy"),
+        )
         auth.begin()
         access_token = auth.get_access_token()
         self.__refresh_headers(access_token)
@@ -82,7 +89,8 @@ class Chatbot:
         :param parent_id: UUID
         :param gen_title: Boolean
         """
-        self.__map_conversations()
+        if conversation_id is not None and parent_id is None:
+            self.__map_conversations()
         if conversation_id is None:
             conversation_id = self.conversation_id
         if parent_id is None:
@@ -115,7 +123,7 @@ class Chatbot:
             timeout_seconds=180,
         )
         if response.status_code != 200:
-            print(response.text)
+            self.__login()
             raise Exception(
                 f"Wrong response code: {response.status_code}! Refreshing session...",
             )
@@ -302,7 +310,6 @@ def chatGPT_main(config):
                     """
                 !help - Show this message
                 !reset - Forget the current conversation
-                !refresh - Refresh the session authentication
                 !config - Show the current configuration
                 !rollback x - Rollback the conversation (x being the number of messages to rollback)
                 !exit - Exit this program
@@ -312,10 +319,6 @@ def chatGPT_main(config):
             elif prompt == "!reset":
                 chatbot.reset_chat()
                 print("Chat session successfully reset.")
-                continue
-            elif prompt == "!refresh":
-                chatbot.__refresh_session()
-                print("Session successfully refreshed.\n")
                 continue
             elif prompt == "!config":
                 print(json.dumps(chatbot.config, indent=4))
